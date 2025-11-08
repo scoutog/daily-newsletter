@@ -22,6 +22,7 @@ load_dotenv()
 # Configuration from environment variables
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
+TMDB_API_KEY = os.getenv('TMDB_API_KEY')
 COUNTRY_CODE = os.getenv('COUNTRY_CODE', 'US')  # Default country code
 
 # Email configuration
@@ -233,6 +234,67 @@ def get_stock_market_data():
         return None
     except Exception as e:
         print(f"Error fetching stock data: {e}")
+        return None
+
+
+def get_movie_recommendation():
+    """Fetch a movie recommendation from The Movie Database (TMDB) API"""
+    if not TMDB_API_KEY:
+        print("Warning: TMDB_API_KEY not set. Skipping movie recommendation.")
+        return None
+    
+    try:
+        # Get top-rated movies (quality over recency)
+        # Use a random page to get variety (pages 1-10 cover ~200 top-rated movies)
+        random_page = random.randint(1, 10)
+        url = f'https://api.themoviedb.org/3/movie/top_rated?api_key={TMDB_API_KEY}&page={random_page}'
+        
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        movies = data.get('results', [])
+        
+        if movies:
+            # Pick a random movie from the page
+            movie = random.choice(movies)
+            
+            # Get movie details for more information
+            movie_id = movie.get('id')
+            details_url = f'https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}'
+            details_response = requests.get(details_url, timeout=10)
+            details_response.raise_for_status()
+            details = details_response.json()
+            
+            # Build poster URL
+            poster_path = movie.get('poster_path', '')
+            poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else ''
+            
+            # Get genres
+            genres = [g.get('name') for g in details.get('genres', [])]
+            genre_str = ', '.join(genres[:3]) if genres else 'N/A'
+            
+            # Get runtime
+            runtime = details.get('runtime', 0)
+            runtime_str = f"{runtime} min" if runtime else 'N/A'
+            
+            # Get rating
+            rating = movie.get('vote_average', 0)
+            
+            return {
+                'title': movie.get('title', 'Unknown'),
+                'overview': movie.get('overview', 'No overview available.'),
+                'poster_url': poster_url,
+                'release_date': movie.get('release_date', 'N/A'),
+                'rating': round(rating, 1),
+                'genres': genre_str,
+                'runtime': runtime_str,
+                'tmdb_url': f"https://www.themoviedb.org/movie/{movie_id}"
+            }
+        
+        return None
+    except Exception as e:
+        print(f"Error fetching movie recommendation: {e}")
         return None
 
 
@@ -454,7 +516,7 @@ def generate_temperature_chart(forecast_list):
 
 
 
-def format_weather_email(current_data, forecast_data, recipient_name=None, news_articles=None, historical_fact=None, stock_data=None, xkcd_comic=None):
+def format_weather_email(current_data, forecast_data, recipient_name=None, news_articles=None, historical_fact=None, stock_data=None, movie_recommendation=None, xkcd_comic=None):
     """Format weather data and news into a compact, focused email"""
     if not current_data or not forecast_data:
         return "Error: Could not fetch weather data."
@@ -716,6 +778,59 @@ def format_weather_email(current_data, forecast_data, recipient_name=None, news_
             </div>
         """
     
+    # Add Movie Recommendation Section if available
+    if movie_recommendation:
+        title = movie_recommendation.get('title', '')
+        overview = movie_recommendation.get('overview', '')
+        poster_url = movie_recommendation.get('poster_url', '')
+        release_date = movie_recommendation.get('release_date', 'N/A')
+        rating = movie_recommendation.get('rating', 0)
+        genres = movie_recommendation.get('genres', 'N/A')
+        runtime = movie_recommendation.get('runtime', 'N/A')
+        tmdb_url = movie_recommendation.get('tmdb_url', '')
+        
+        # Format release year
+        release_year = release_date.split('-')[0] if release_date and release_date != 'N/A' else 'N/A'
+        
+        # Create star rating visualization
+        full_stars = int(rating / 2)  # Convert 10-point scale to 5-star
+        half_star = 1 if (rating / 2) - full_stars >= 0.5 else 0
+        empty_stars = 5 - full_stars - half_star
+        stars = '⭐' * full_stars + ('✨' if half_star else '') + '☆' * empty_stars
+        
+        # Truncate overview if too long
+        if len(overview) > 300:
+            overview = overview[:297] + '...'
+        
+        email_body += f"""
+            <!-- Movie Recommendation Section -->
+            <div style="padding: 20px 0; border-top: 2px solid #e0e0e0; margin-top: 20px;">
+                <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #333; font-weight: bold;">🎬 Movie Recommendation of the Day</h3>
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #e74c3c;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            {'<td style="width: 100px; vertical-align: top; padding-right: 15px;"><a href="' + tmdb_url + '"><img src="' + poster_url + '" alt="' + title + ' poster" style="width: 100px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);" /></a></td>' if poster_url else ''}
+                            <td style="vertical-align: top;">
+                                <div style="font-size: 16px; font-weight: 600; color: #c0392b; margin-bottom: 6px;">
+                                    <a href="{tmdb_url}" style="color: #c0392b; text-decoration: none;">{title}</a>
+                                    <span style="font-size: 13px; color: #999; font-weight: normal;"> ({release_year})</span>
+                                </div>
+                                <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                                    <span style="margin-right: 10px;">{stars} {rating}/10</span>
+                                    <span style="margin-right: 10px;">• {genres}</span>
+                                    <span>• {runtime}</span>
+                                </div>
+                                <div style="font-size: 13px; color: #555; line-height: 1.5; margin-bottom: 10px;">{overview}</div>
+                                <div>
+                                    <a href="{tmdb_url}" style="font-size: 11px; color: #3498db; text-decoration: none; font-weight: 500;">View on TMDB →</a>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        """
+    
     # Add XKCD Comic if available
     if xkcd_comic:
         title = xkcd_comic.get('title', '')
@@ -743,7 +858,7 @@ def format_weather_email(current_data, forecast_data, recipient_name=None, news_
     email_body += f"""
             <!-- Footer -->
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center; font-size: 11px; color: #999;">
-                {greeting} Weather from OpenWeatherMap{', News from NewsAPI' if news_articles else ''}{', History from Wikipedia' if historical_fact else ''}{', Comic from XKCD' if xkcd_comic else ''}
+                {greeting} Weather from OpenWeatherMap{', News from NewsAPI' if news_articles else ''}{', History from Wikipedia' if historical_fact else ''}{', Movies from TMDB' if movie_recommendation else ''}{', Comic from XKCD' if xkcd_comic else ''}
             </div>
         </div>
     </body>
@@ -804,7 +919,7 @@ def load_user_list():
         return []
 
 
-def send_weather_email_to_user(user, news_articles=None, historical_fact=None, stock_data=None, xkcd_comic=None):
+def send_weather_email_to_user(user, news_articles=None, historical_fact=None, stock_data=None, movie_recommendation=None, xkcd_comic=None):
     """Fetch weather and send email to a single user"""
     name = user['name']
     email = user['email']
@@ -827,7 +942,7 @@ def send_weather_email_to_user(user, news_articles=None, historical_fact=None, s
     
     if current_data and forecast_data:
         # Format email with all content
-        email_body = format_weather_email(current_data, forecast_data, name, news_articles, historical_fact, stock_data, xkcd_comic)
+        email_body = format_weather_email(current_data, forecast_data, name, news_articles, historical_fact, stock_data, movie_recommendation, xkcd_comic)
         
         # Send email
         return send_email(email_body, email, name)
@@ -871,6 +986,14 @@ def send_daily_weather_email():
     else:
         print("No stock market data found")
     
+    # Fetch movie recommendation
+    print("Fetching movie recommendation...")
+    movie_recommendation = get_movie_recommendation()
+    if movie_recommendation:
+        print(f"Movie recommendation: {movie_recommendation.get('title')} ({movie_recommendation.get('rating')}/10)")
+    else:
+        print("No movie recommendation found")
+    
     # Fetch XKCD comic
     print("Fetching XKCD comic...")
     xkcd_comic = get_xkcd_comic()
@@ -882,7 +1005,7 @@ def send_daily_weather_email():
     # Send email to each user
     success_count = 0
     for user in users:
-        if send_weather_email_to_user(user, news_articles, historical_fact, stock_data, xkcd_comic):
+        if send_weather_email_to_user(user, news_articles, historical_fact, stock_data, movie_recommendation, xkcd_comic):
             success_count += 1
         # Small delay between emails to avoid rate limiting
         time.sleep(1)
