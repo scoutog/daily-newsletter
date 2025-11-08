@@ -1,6 +1,6 @@
 # 📧 Daily Brief - Automated Email Service
 
-A Python-based automated email service that sends personalized daily briefings with weather forecasts, top news stories, historical facts, stock market updates, and a daily comic to your recipients.
+A Python-based automated email service that sends personalized daily briefings with weather forecasts, top news stories, historical facts, stock market updates, movie recommendations, and a daily comic to your recipients.
 
 ## ✨ Features
 
@@ -8,6 +8,7 @@ A Python-based automated email service that sends personalized daily briefings w
 - **📰 Top News Stories**: Latest headlines from the past 24 hours (powered by NewsAPI)
 - **📈 Stock Market Data**: S&P 500 index performance
 - **📜 Historical Facts**: Learn what happened on this day in history (via Wikipedia)
+- **🎬 Movie Recommendations**: Daily curated movie suggestion from top-rated films (powered by TMDB)
 - **💥 Daily Comic**: Latest XKCD comic for a smile
 - **👥 Multi-Recipient Support**: Send personalized emails to multiple people with location-specific weather
 - **🎨 Beautiful HTML Emails**: Clean, responsive email design optimized for all devices
@@ -32,6 +33,7 @@ You'll need to obtain free API keys from:
 
 - **OpenWeatherMap** (required): [https://openweathermap.org/api](https://openweathermap.org/api)
 - **NewsAPI** (optional): [https://newsapi.org/](https://newsapi.org/)
+- **TMDB** (optional): [https://www.themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)
 
 ### 3. Configure Environment Variables
 
@@ -44,6 +46,7 @@ You'll need to obtain free API keys from:
    ```env
    WEATHER_API_KEY=your_openweathermap_api_key_here
    NEWS_API_KEY=your_newsapi_key_here
+   TMDB_API_KEY=your_tmdb_api_key_here
    EMAIL_ADDRESS=your_email@gmail.com
    EMAIL_PASSWORD=your_app_password_here
    ```
@@ -139,6 +142,7 @@ Make sure to set `RUN_ONCE=true` in your `.env` file when using cron.
 |----------|----------|---------|-------------|
 | `WEATHER_API_KEY` | Yes | - | OpenWeatherMap API key |
 | `NEWS_API_KEY` | No | - | NewsAPI key (optional, for news section) |
+| `TMDB_API_KEY` | No | - | TMDB API key (optional, for movie recommendations) |
 | `EMAIL_ADDRESS` | Yes | - | Sender email address |
 | `EMAIL_PASSWORD` | Yes | - | Email app password |
 | `SMTP_SERVER` | No | `smtp.gmail.com` | SMTP server address |
@@ -162,6 +166,13 @@ News stories are fetched from NewsAPI's free tier:
 - US-focused news (configurable via `COUNTRY_CODE`)
 - Displays up to 8 articles per email
 
+### Movie Recommendations
+
+Movie suggestions are fetched from The Movie Database (TMDB):
+- Randomly selected from top-rated movies for quality recommendations
+- Includes poster, rating, genres, runtime, and synopsis
+- Pool of ~200 highly-rated films spanning different eras
+
 ## 📧 Email Contents
 
 Each daily brief includes:
@@ -173,7 +184,8 @@ Each daily brief includes:
 5. **Top News**: Latest headlines with descriptions and links
 6. **S&P 500**: Market performance indicator
 7. **Historical Fact**: Interesting events that happened on this day
-8. **XKCD Comic**: Latest webcomic for entertainment
+8. **Movie Recommendation**: Curated film suggestion with poster, rating, and details
+9. **XKCD Comic**: Latest webcomic for entertainment
 
 ## 🐛 Troubleshooting
 
@@ -195,6 +207,11 @@ Each daily brief includes:
 - This is optional - add `NEWS_API_KEY` to enable it
 - Check NewsAPI rate limits (free tier: 100 requests/day)
 
+### Movie recommendation missing
+
+- This is optional - add `TMDB_API_KEY` to enable it
+- Verify your TMDB API key is valid and active
+
 ### Script stops unexpectedly
 
 - Check console output for error messages
@@ -206,6 +223,7 @@ Each daily brief includes:
 - **API Rate Limits**: Be mindful of free tier limits:
   - OpenWeatherMap: 1,000 calls/day
   - NewsAPI: 100 requests/day
+  - TMDB: 1,000 requests/day
 - **Email Rate Limits**: Gmail has sending limits (500/day for regular accounts)
 - **Privacy**: Keep your `.env` and `email-list.csv` secure and never commit them to version control (already protected by `.gitignore`)
 - **Customization**: The email HTML can be customized in the `format_weather_email()` function
@@ -243,6 +261,7 @@ This project is provided as-is for personal use. API providers have their own te
 - News data: [NewsAPI](https://newsapi.org/)
 - Historical facts: [Wikipedia](https://www.wikipedia.org/)
 - Stock data: [Yahoo Finance](https://finance.yahoo.com/)
+- Movie data: [The Movie Database (TMDB)](https://www.themoviedb.org/)
 - Comics: [XKCD](https://xkcd.com/)
 
 ---
