@@ -320,24 +320,62 @@ def get_xkcd_comic():
 
 
 def get_top_news_stories(num_stories=8):
-    """Fetch top news stories from the past 24 hours using NewsAPI"""
+    """Fetch top news stories and big USA headlines using NewsAPI"""
     if not NEWS_API_KEY:
         print("Warning: NEWS_API_KEY not set. Skipping news section.")
         return []
     
     try:
-        from_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-        url = f'https://newsapi.org/v2/top-headlines?country=us&from={from_date}&pageSize={num_stories}&apiKey={NEWS_API_KEY}'
+        # Use top-headlines endpoint without 'from' parameter to get the biggest current headlines
+        # Request more articles than needed so we can filter and prioritize
+        url = f'https://newsapi.org/v2/top-headlines?country=us&pageSize={num_stories * 2}&apiKey={NEWS_API_KEY}'
         
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
         
         articles = data.get('articles', [])
-        # Filter out articles without title or url
-        articles = [a for a in articles if a.get('title') and a.get('url') and a.get('title') != '[Removed]']
         
-        return articles[:num_stories]
+        # Filter out articles without title, url, or description
+        # Also filter out removed articles and those without meaningful content
+        filtered_articles = []
+        for article in articles:
+            title = article.get('title', '')
+            url = article.get('url', '')
+            description = article.get('description', '')
+            
+            # Skip if missing key information or marked as removed
+            if not title or not url or title == '[Removed]':
+                continue
+            
+            # Skip if description is too short (likely not a major story)
+            if description and len(description) < 30:
+                continue
+                
+            filtered_articles.append(article)
+        
+        # Also fetch "everything" endpoint for breaking news to supplement
+        # This helps catch major stories that might not be in top-headlines yet
+        try:
+            today = datetime.now().strftime('%Y-%m-%d')
+            everything_url = f'https://newsapi.org/v2/everything?q=USA OR "United States" OR breaking&language=en&sortBy=popularity&from={today}&pageSize=10&apiKey={NEWS_API_KEY}'
+            
+            everything_response = requests.get(everything_url, timeout=10)
+            if everything_response.status_code == 200:
+                everything_data = everything_response.json()
+                everything_articles = everything_data.get('articles', [])
+                
+                # Add articles from everything endpoint that aren't already included
+                existing_urls = {a.get('url') for a in filtered_articles}
+                for article in everything_articles:
+                    if article.get('url') not in existing_urls and article.get('title') and article.get('title') != '[Removed]':
+                        filtered_articles.append(article)
+        except Exception as e:
+            print(f"Note: Could not fetch supplementary news: {e}")
+        
+        # Return top stories up to the requested number
+        return filtered_articles[:num_stories]
+        
     except requests.exceptions.RequestException as e:
         print(f"Error fetching news: {e}")
         return []
