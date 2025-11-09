@@ -299,21 +299,59 @@ def get_movie_recommendation():
 
 
 def get_xkcd_comic():
-    """Fetch the latest XKCD comic"""
+    """Fetch XKCD comic - latest if new today, otherwise random"""
     try:
-        url = 'https://xkcd.com/info.0.json'
+        # First, fetch the latest comic to check if it's new
+        latest_url = 'https://xkcd.com/info.0.json'
         
-        response = requests.get(url, timeout=10)
+        response = requests.get(latest_url, timeout=10)
         response.raise_for_status()
-        data = response.json()
+        latest_data = response.json()
         
-        return {
-            'title': data.get('title', ''),
-            'img': data.get('img', ''),
-            'alt': data.get('alt', ''),
-            'num': data.get('num', ''),
-            'link': f"https://xkcd.com/{data.get('num', '')}"
-        }
+        # Check if the latest comic was published today
+        comic_year = latest_data.get('year')
+        comic_month = latest_data.get('month')
+        comic_day = latest_data.get('day')
+        
+        today = datetime.now()
+        is_new_today = (
+            int(comic_year) == today.year and
+            int(comic_month) == today.month and
+            int(comic_day) == today.day
+        )
+        
+        if is_new_today:
+            # Show the new comic
+            return {
+                'title': latest_data.get('title', ''),
+                'img': latest_data.get('img', ''),
+                'alt': latest_data.get('alt', ''),
+                'num': latest_data.get('num', ''),
+                'link': f"https://xkcd.com/{latest_data.get('num', '')}",
+                'is_new': True,
+                'label': f"New comic today #{latest_data.get('num', '')}"
+            }
+        else:
+            # No new comic today, fetch a random one
+            max_comic_num = latest_data.get('num', 2000)
+            random_num = random.randint(1, max_comic_num)
+            
+            # Fetch the random comic
+            random_url = f'https://xkcd.com/{random_num}/info.0.json'
+            random_response = requests.get(random_url, timeout=10)
+            random_response.raise_for_status()
+            random_data = random_response.json()
+            
+            return {
+                'title': random_data.get('title', ''),
+                'img': random_data.get('img', ''),
+                'alt': random_data.get('alt', ''),
+                'num': random_data.get('num', ''),
+                'link': f"https://xkcd.com/{random_data.get('num', '')}",
+                'is_new': False,
+                'label': f"No new comic, here's a random one #{random_data.get('num', '')}"
+            }
+            
     except Exception as e:
         print(f"Error fetching XKCD comic: {e}")
         return None
@@ -346,6 +384,10 @@ def get_top_news_stories(num_stories=8):
             
             # Skip if missing key information or marked as removed
             if not title or not url or title == '[Removed]':
+                continue
+            
+            # Skip horoscope articles
+            if 'horoscope' in title.lower():
                 continue
             
             # Skip if description is too short (likely not a major story)
@@ -745,7 +787,7 @@ def format_weather_email(current_data, forecast_data, recipient_name=None, news_
         email_body += """
             <!-- News Section -->
             <div style="padding-top: 20px; border-top: 2px solid #e0e0e0; margin-top: 20px;">
-                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #333; font-weight: bold;">📰 Top News (Past 24 Hours)</h3>
+                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #333; font-weight: bold;">📰 Top News</h3>
         """
         
         # Add S&P 500 data if available
@@ -875,11 +917,14 @@ def format_weather_email(current_data, forecast_data, recipient_name=None, news_
         img_url = xkcd_comic.get('img', '')
         alt_text = xkcd_comic.get('alt', '')
         link = xkcd_comic.get('link', '')
+        label = xkcd_comic.get('label', 'Comic of the Day')
+        is_new = xkcd_comic.get('is_new', False)
         
         email_body += f"""
             <!-- XKCD Comic -->
             <div style="padding-top: 20px; border-top: 2px solid #e0e0e0; margin-top: 20px;">
-                <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #333; font-weight: bold;">💥 Comic of the Day</h3>
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #333; font-weight: bold;">💥 XKCD Comic</h3>
+                <div style="margin: 0 0 12px 0; font-size: 13px; color: #666;">{label}</div>
                 <div style="text-align: center; background-color: #f8f9fa; padding: 15px; border-radius: 8px;">
                     <a href="{link}" style="text-decoration: none;">
                         <img src="{img_url}" alt="{alt_text}" style="max-width: 100%; height: auto; border-radius: 4px;" />
@@ -1036,7 +1081,8 @@ def send_daily_weather_email():
     print("Fetching XKCD comic...")
     xkcd_comic = get_xkcd_comic()
     if xkcd_comic:
-        print(f"Found XKCD #{xkcd_comic.get('num')}: {xkcd_comic.get('title')}")
+        status = "NEW" if xkcd_comic.get('is_new') else "RANDOM"
+        print(f"Found XKCD ({status}) #{xkcd_comic.get('num')}: {xkcd_comic.get('title')}")
     else:
         print("No XKCD comic found")
     
