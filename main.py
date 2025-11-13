@@ -34,6 +34,9 @@ SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
 # CSV file path
 EMAIL_LIST_CSV = os.getenv('EMAIL_LIST_CSV', 'email-list.csv')
 
+# XKCD state file to track last shown comic
+XKCD_STATE_FILE = 'last_xkcd_shown.txt'
+
 # State name to state code mapping
 STATE_MAPPING = {
     'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
@@ -299,7 +302,7 @@ def get_movie_recommendation():
 
 
 def get_xkcd_comic():
-    """Fetch XKCD comic - latest if new today, otherwise random"""
+    """Fetch XKCD comic - latest if published today/yesterday and not yet shown, otherwise random"""
     try:
         # First, fetch the latest comic to check if it's new
         latest_url = 'https://xkcd.com/info.0.json'
@@ -308,31 +311,53 @@ def get_xkcd_comic():
         response.raise_for_status()
         latest_data = response.json()
         
-        # Check if the latest comic was published today
+        # Check if the latest comic was published today or yesterday
+        # This catches comics published either:
+        # - Yesterday afternoon/evening (show the next morning)
+        # - Today early morning before 8am (show this morning)
         comic_year = latest_data.get('year')
         comic_month = latest_data.get('month')
         comic_day = latest_data.get('day')
+        comic_num = latest_data.get('num')
         
-        today = datetime.now()
-        is_new_today = (
-            int(comic_year) == today.year and
-            int(comic_month) == today.month and
-            int(comic_day) == today.day
-        )
+        # Create date object for the comic's publication date
+        comic_date = datetime(int(comic_year), int(comic_month), int(comic_day)).date()
+        today = datetime.now().date()
+        yesterday = (datetime.now() - timedelta(days=1)).date()
         
-        if is_new_today:
+        # Check if comic is from today or yesterday
+        is_recent = (comic_date == today) or (comic_date == yesterday)
+        
+        # Read the last shown comic number from state file
+        last_shown_num = None
+        try:
+            if os.path.exists(XKCD_STATE_FILE):
+                with open(XKCD_STATE_FILE, 'r') as f:
+                    last_shown_num = int(f.read().strip())
+        except:
+            pass
+        
+        # Show the latest comic if it's recent AND we haven't shown it before
+        if is_recent and comic_num != last_shown_num:
+            # Save this comic number to state file so we don't show it again
+            try:
+                with open(XKCD_STATE_FILE, 'w') as f:
+                    f.write(str(comic_num))
+            except Exception as e:
+                print(f"Warning: Could not save xkcd state: {e}")
+            
             # Show the new comic
             return {
                 'title': latest_data.get('title', ''),
                 'img': latest_data.get('img', ''),
                 'alt': latest_data.get('alt', ''),
-                'num': latest_data.get('num', ''),
-                'link': f"https://xkcd.com/{latest_data.get('num', '')}",
+                'num': comic_num,
+                'link': f"https://xkcd.com/{comic_num}",
                 'is_new': True,
-                'label': f"New comic today #{latest_data.get('num', '')}"
+                'label': f"New comic #{comic_num}"
             }
         else:
-            # No new comic today, fetch a random one
+            # No new comic to show, fetch a random one
             max_comic_num = latest_data.get('num', 2000)
             random_num = random.randint(1, max_comic_num)
             
